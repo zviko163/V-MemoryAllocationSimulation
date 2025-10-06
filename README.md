@@ -1,12 +1,12 @@
 # V-MemoryAllocationSimulation
 Virtual Memory Allocation Simulation in C++
 
-# Paged Memory Allocation (PMA.cpp)
+### Paged Memory Allocation (PMA.cpp)
 
 This program simulates **paged memory allocation** using data loaded from a text file.  
 It divides memory into page frames, allocates jobs, and reports internal fragmentation.
 
-## Input Format
+### Input Format
 Default - input.txt
 
 MemorySize <total_memory_KB> <page_size_KB>
@@ -23,7 +23,7 @@ JobA 200
 JobB 300
 
 
-## ▶Run
+### ▶Run
 ```bash
 g++ PMA.cpp -o pma
 ./pma
