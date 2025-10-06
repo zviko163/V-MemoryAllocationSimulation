@@ -4,6 +4,20 @@
 
 using namespace std;
 
+
+
+
+/*
+ * function to calculate the internal fragmentation for a job
+ * returns the fragmentation size in KB
+ */
+int calculateInternalFragmentation(const Job &job, int pageSize) {
+    int remainder = job.size % pageSize;
+    if (remainder == 0)
+        return 0;
+    return pageSize - remainder;
+}
+
 /*
  * divides memory into frames based on page size (specified in the input by end user)
  * allocates memory frames to the job based on its size and the main memory's page size
@@ -46,6 +60,14 @@ void divideMemoryToFrames(Job &job, Memory &mainMemory) {
     } else {
         // on a successful allocation
         cout << "Job " << job.name << " allocated successfully.\n";
+
+        // calculating and displaying internal fragmentation
+        int fragmentation = calculateInternalFragmentation(job, mainMemory.pageSize);
+        if (fragmentation > 0)
+            cout << "\nInternal Fragmentation for job " << job.name << ": "
+                 << fragmentation << " KB\n";
+        else
+            cout << "No Internal Fragmentation for job " << job.name << ".\n";
     }
 }
 
@@ -84,7 +106,7 @@ int main() {
 
     mainMemory.numFrames = mainMemory.totalSize / mainMemory.pageSize;
 
-    // Initialize memory frames
+    // initializing memory frames
     for (int i = 0; i < mainMemory.numFrames; ++i)
         mainMemory.frames.push_back({i, true, "", -1});
 
@@ -107,7 +129,7 @@ int main() {
         jobs.push_back(job);
     }
 
-    // Display results
+    // displaying results
     displayMMT(mainMemory);
 
     for (auto &job : jobs)
