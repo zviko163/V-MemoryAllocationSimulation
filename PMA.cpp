@@ -1,10 +1,72 @@
 #include "structs.h"
 #include <iostream>
 #include <cmath>
+#include <fstream>
+#include <sstream>
 
 using namespace std;
 
+/*
+ * function to load jobs and memory info from a text file
+ * this makes it easier to test with different inputs
+ * file format:
+ * MemorySize <total_memory_size_in_KB> <page_size_in_KB>
+ * Job1 <job_size_in_KB>
+ * Job2 <job_size_in_KB>
+ * ...
+ */
+bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "Error: Could not open file " << filename << endl;
+        return false;
+    }
 
+    string line;
+    bool memorySet = false;
+
+    while (getline(file, line)) {
+        if (line.empty()) continue;
+
+        stringstream ss(line);
+        string name;
+        ss >> name;
+
+        // extraacting memory attributes and job details from file
+        if (name == "MemorySize") {
+            ss >> memory.totalSize >> memory.pageSize;
+            memorySet = true;
+        } else {
+            Job job;
+            job.name = name;
+            ss >> job.size;
+            jobs.push_back(job);
+        }
+    }
+
+    file.close();
+
+    // ensuring memory parameters were set
+    if (!memorySet) {
+        cerr << "Error: Memory size not specified in file.\n";
+        return false;
+    }
+
+    // computing number of frames created in memory
+    memory.numFrames = memory.totalSize / memory.pageSize;
+
+    // initializing memory frames
+    for (int i = 0; i < memory.numFrames; ++i) {
+        Frame f;
+        f.frameNumber = i;
+        f.isFree = true;
+        f.jobName = "";
+        f.pageNumber = -1;
+        memory.frames.push_back(f);
+    }
+
+    return true;
+}
 
 
 /*
@@ -96,42 +158,23 @@ void displayMMT(const Memory &memory) {
 
 int main() {
     Memory mainMemory;
-
-    // User defines memory size and page size
-    cout << "Enter total memory size (KB): ";
-    cin >> mainMemory.totalSize;
-
-    cout << "Enter page size (KB): ";
-    cin >> mainMemory.pageSize;
-
-    mainMemory.numFrames = mainMemory.totalSize / mainMemory.pageSize;
-
-    // initializing memory frames
-    for (int i = 0; i < mainMemory.numFrames; ++i)
-        mainMemory.frames.push_back({i, true, "", -1});
-
-    cout << "\nMemory initialized with " << mainMemory.numFrames
-         << " frames (" << mainMemory.pageSize << " KB each).\n";
-
-    int numJobs;
-    cout << "\nEnter number of jobs to allocate: ";
-    cin >> numJobs;
-
     vector<Job> jobs;
-    for (int i = 0; i < numJobs; ++i) {
-        Job job;
-        cout << "\nEnter job name: ";
-        cin >> job.name;
-        cout << "Enter job size (KB): ";
-        cin >> job.size;
 
-        divideMemoryToFrames(job, mainMemory);
-        jobs.push_back(job);
+    string filename;
+    cout << "Enter input filename: ";
+    cin >> filename;
+
+    if (!loadFromFile(filename, jobs, mainMemory)) {
+        cerr << "Failed to load data.\n";
+        return 1;
     }
 
-    // displaying results
-    displayMMT(mainMemory);
+    // Allocate memory for each job
+    for (auto &job : jobs)
+        divideMemoryToFrames(job, mainMemory);
 
+    // Display MMT and PMTs
+    displayMMT(mainMemory);
     for (auto &job : jobs)
         displayPMT(job);
 
