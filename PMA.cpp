@@ -1,120 +1,182 @@
+#include "structs.h"
 #include <iostream>
-#include <vector>
-#include <string>
 #include <cmath>
-#include <cstdlib>   // for rand()
-#include "memory_structs.h"
+#include <fstream>
+#include <sstream>
 
 using namespace std;
 
-// ---------- GLOBAL MEMORY ----------
-MemoryMapTable mmt;
-vector<Job> jobTable;
-int totalFrames = 8;  // example total frames in memory
+/*
+ * function to load jobs and memory info from a text file
+ * this makes it easier to test with different inputs
+ * file format:
+ * MemorySize <total_memory_size_in_KB> <page_size_in_KB>
+ * Job1 <job_size_in_KB>
+ * Job2 <job_size_in_KB>
+ * ...
+ */
+bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "Error: Could not open file " << filename << endl;
+        return false;
+    }
+
+    string line;
+    bool memorySet = false;
+
+    while (getline(file, line)) {
+        if (line.empty()) continue;
+
+        stringstream ss(line);
+        string name;
+        ss >> name;
+
+        // extraacting memory attributes and job details from file
+        if (name == "MemorySize") {
+            ss >> memory.totalSize >> memory.pageSize;
+            memorySet = true;
+        } else {
+            Job job;
+            job.name = name;
+            ss >> job.size;
+            jobs.push_back(job);
+        }
+    }
+
+    file.close();
+
+    // ensuring memory parameters were set
+    if (!memorySet) {
+        cerr << "Error: Memory size not specified in file.\n";
+        return false;
+    }
+
+    // computing number of frames created in memory
+    memory.numFrames = memory.totalSize / memory.pageSize;
+
+    // initializing memory frames
+    for (int i = 0; i < memory.numFrames; ++i) {
+        Frame f;
+        f.frameNumber = i;
+        f.isFree = true;
+        f.jobName = "";
+        f.pageNumber = -1;
+        memory.frames.push_back(f);
+    }
+
+    return true;
+}
 
 
-// ---------- FUNCTION DECLARATIONS ----------
-void acceptJob();
-void divideIntoPages(Job &job);
-void loadJobIntoFrames(Job &job);
-void performAddressResolution(Job &job);
+/*
+ * function to calculate the internal fragmentation for a job
+ * returns the fragmentation size in KB
+ */
+int calculateInternalFragmentation(const Job &job, int pageSize) {
+    int remainder = job.size % pageSize;
+    if (remainder == 0)
+        return 0;
+    return pageSize - remainder;
+}
 
+/*
+ * divides memory into frames based on page size (specified in the input by end user)
+ * allocates memory frames to the job based on its size and the main memory's page size
+ * if memory is insufficient, it does not allocate any frames to the job
+ */
 
-// ---------- MAIN FUNCTION ----------
+void divideMemoryToFrames(Job &job, Memory &mainMemory) {
+    // calculating number of pages per job using job size and page size
+    job.numPages = ceil((double)job.size / mainMemory.pageSize);
+
+    cout << "\nAllocating job " << job.name << " (" << job.size << " KB)"
+         << " needing " << job.numPages << " pages...\n";
+
+    int allocated = 0;
+
+    // looping through frames array to allocate pages to the free frames
+    for (int i = 0; i < mainMemory.numFrames && allocated < job.numPages; ++i) {
+        if (mainMemory.frames[i].isFree) {
+            mainMemory.frames[i].isFree = false;
+            mainMemory.frames[i].jobName = job.name;
+            mainMemory.frames[i].pageNumber = allocated;
+
+            // updating job's Page Map Table; adding allocated page
+            Page page = {allocated, i};
+            job.pages.push_back(page);
+
+            allocated++;
+        }
+    }
+
+    // in an scenario where not all pages could be allocated, deallocate all previously allocated pages
+    if (allocated < job.numPages) {
+        cout << "Not enough memory to allocate all pages for " << job.name << endl;
+
+        for (Page &p : job.pages)
+            mainMemory.frames[p.frameNumber].isFree = true;
+
+        // clearing the job's pages array
+        job.pages.clear();
+    } else {
+        // on a successful allocation
+        cout << "Job " << job.name << " allocated successfully.\n";
+
+        // calculating and displaying internal fragmentation
+        int fragmentation = calculateInternalFragmentation(job, mainMemory.pageSize);
+        if (fragmentation > 0)
+            cout << "\nInternal Fragmentation for job " << job.name << ": "
+                 << fragmentation << " KB\n";
+        else
+            cout << "No Internal Fragmentation for job " << job.name << ".\n";
+    }
+}
+
+/*
+ * displaying functions
+ * functions to display Page Map Table (PMT) and Memory Map Table (MMT)
+ */
+void displayPMT(const Job &job) {
+    cout << "\nPage Map Table (PMT) for " << job.name << ":\n";
+    cout << "Page\tFrame\n";
+    for (const Page &p : job.pages)
+        cout << p.pageNumber << "\t" << p.frameNumber << endl;
+}
+
+void displayMMT(const Memory &memory) {
+    cout << "\nMemory Map Table (MMT):\n";
+    cout << "Frame\tStatus\t\tJob(Page)\n";
+    for (const Frame &f : memory.frames) {
+        cout << f.frameNumber << "\t";
+        if (f.isFree)
+            cout << "Free\t\t-\n";
+        else
+            cout << "Used\t\t" << f.jobName << "(" << f.pageNumber << ")\n";
+    }
+}
+
 int main() {
-    cout << "=== Paged Memory Allocation Simulation ===" << endl;
-    
-    // Initialize memory map table
-    for (int i = 0; i < totalFrames; i++) {
-        MemoryMapEntry entry = {i, "EMPTY", -1};
-        mmt.entries.push_back(entry);
+    Memory mainMemory;
+    vector<Job> jobs;
+
+    string filename;
+    cout << "Enter input filename: ";
+    cin >> filename;
+
+    if (!loadFromFile(filename, jobs, mainMemory)) {
+        cerr << "Failed to load data.\n";
+        return 1;
     }
 
-    // Accept and process one job (for now)
-    acceptJob();
+    // Allocate memory for each job
+    for (auto &job : jobs)
+        divideMemoryToFrames(job, mainMemory);
 
-    // Display memory map (to visualize)
-    cout << "\n=== Memory Map Table ===" << endl;
-    for (auto &e : mmt.entries) {
-        cout << "Frame " << e.frameNumber << " | Job: " 
-             << e.jobName << " | Page: " << e.pageNumber << endl;
-    }
+    // Display MMT and PMTs
+    displayMMT(mainMemory);
+    for (auto &job : jobs)
+        displayPMT(job);
 
     return 0;
-}
-
-
-// ---------- FUNCTION DEFINITIONS ----------
-
-// Accept job info from user
-void acceptJob() {
-    Job job;
-    cout << "Enter Job Name: ";
-    cin >> job.name;
-    cout << "Enter Job Size (KB): ";
-    cin >> job.jobSize;
-    cout << "Enter Page Size (KB): ";
-    cin >> job.pageSize;
-
-    divideIntoPages(job);
-    loadJobIntoFrames(job);
-    performAddressResolution(job);
-
-    // adding the user-entered job to the job table
-    jobTable.push_back(job);
-}
-
-// Divide job into pages
-void divideIntoPages(Job &job) {
-    job.numPages = ceil((double)job.jobSize / job.pageSize);
-    job.internalFragmentation = (job.numPages * job.pageSize) - job.jobSize;
-
-    cout << "\nJob divided into " << job.numPages << " pages.";
-    cout << "\nInternal Fragmentation: " << job.internalFragmentation << " KB\n";
-
-    // Initialize PMT
-    for (int i = 0; i < job.numPages; i++) {
-        PageMapEntry entry = {i, -1}; // frame to be assigned later
-        job.pmt.entries.push_back(entry);
-    }
-}
-
-// Load job pages into available frames (randomly for simulation)
-void loadJobIntoFrames(Job &job) {
-    cout << "\nLoading pages into memory frames...\n";
-
-    for (int i = 0; i < job.numPages; i++) {
-        int frame = rand() % totalFrames;
-
-        // Assign frame in PMT
-        job.pmt.entries[i].frameNumber = frame;
-
-        // Update MMT
-        mmt.entries[frame].jobName = job.name;
-        mmt.entries[frame].pageNumber = i;
-
-        cout << "Page " << i << " -> Frame " << frame << endl;
-    }
-}
-
-// Perform logical → physical address translation
-void performAddressResolution(Job &job) {
-    cout << "\nAddress Resolution for Job: " << job.name << endl;
-    int logicalAddr;
-    cout << "Enter Logical Address (e.g., 250): ";
-    cin >> logicalAddr;
-
-    int pageNumber = logicalAddr / job.pageSize;
-    int offset = logicalAddr % job.pageSize;
-
-    if (pageNumber >= job.numPages) {
-        cout << "Invalid address — exceeds job size.\n";
-        return;
-    }
-
-    int frame = job.pmt.entries[pageNumber].frameNumber;
-    int physicalAddr = (frame * job.pageSize) + offset;
-
-    cout << "Logical Address " << logicalAddr 
-         << " → Physical Address " << physicalAddr << endl;
 }
