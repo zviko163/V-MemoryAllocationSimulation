@@ -10,6 +10,11 @@
 #include <list>
 using namespace std;
 
+// function to load data from a file
+/*
+    This function loads data from a file and stores it in the jobs, memory, and requests vectors.
+*/
+
 bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory,
                   vector<AddressRequest> &requests, int &replacementPolicy) {
     ifstream file(filename);
@@ -54,7 +59,11 @@ bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory,
     return true;
 }
 
-// Simulate initial page load
+// function to simulate initial page load
+/*
+    This function simulates the initial page load for a given job.
+*/
+
 void simulateDemandPaging(Job &job, Memory &mainMemory) {
     job.numPages = ceil((double)job.size / mainMemory.pageSize);
     cout << "\nLoading Job " << job.name << " (" << job.size << " KB)...\n";
@@ -88,6 +97,11 @@ void simulateDemandPaging(Job &job, Memory &mainMemory) {
     }
 }
 
+// function to display the memory map table
+/*
+    This function displays the memory map table.
+*/
+
 void displayMMT(const Memory &memory) {
     cout << "\nMemory Map Table (MMT):\n";
     cout << "Frame\tStatus\t\tJob(Page)\n";
@@ -100,6 +114,11 @@ void displayMMT(const Memory &memory) {
     }
 }
 
+// function to display the page map table
+/*
+    This function displays the page map table for a given job.
+*/
+
 void displayPMT(const Job &job) {
     cout << "\nPage Map Table (PMT) for " << job.name << ":\n";
     cout << "Page\tFrame\n";
@@ -109,6 +128,13 @@ void displayPMT(const Job &job) {
         else cout << p->frameNumber << endl;
     }
 }
+
+// function to resolve addresses
+/*
+    This function resolves logical addresses to physical addresses using the page table and memory map table.
+    It also handles page faults and page replacements based on the replacement policy.
+*/
+
 
 void resolveAddresses(vector<AddressRequest> &requests, vector<Job> &jobs, Memory &memory, int replacementPolicy) {
     cout << "\nAddress Resolution with Page Replacement (" 

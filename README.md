@@ -32,7 +32,7 @@ g++ -std=c++11 virtual_memory.cpp -o vm
 # Enter: vm_input.txt
 ```
 
-## 📋 Input File Formats
+## Input File Formats
 
 ### 1. Paged Memory Allocation (PMA.cpp) - `input.txt`
 ```

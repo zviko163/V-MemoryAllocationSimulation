@@ -8,6 +8,12 @@
 #include <algorithm>
 using namespace std;
 
+
+// function to load data from a file
+/*
+    This function loads data from a file and stores it in the jobs, memory, and requests vectors.
+*/
+
 bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory, vector<AddressRequest> &requests) {
     ifstream file(filename);
     if (!file.is_open()) return false;
@@ -46,6 +52,11 @@ bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory, vec
 
     return true;
 }
+
+// function to simulate demand paging
+/*
+    This function simulates demand paging for a given job.
+*/
 
 void simulateDemandPaging(Job &job, Memory &mainMemory) {
     job.numPages = ceil((double)job.size / mainMemory.pageSize);
@@ -87,6 +98,11 @@ void simulateDemandPaging(Job &job, Memory &mainMemory) {
     }
 }
 
+// function to display the page map table
+/*
+    This function displays the page map table for a given job.
+*/
+
 void displayPMT(const Job &job) {
     cout << "\nPage Map Table (PMT) for " << job.name << ":\n";
     cout << "Page\tFrame\n";
@@ -96,6 +112,11 @@ void displayPMT(const Job &job) {
         else cout << p->frameNumber << endl;
     }
 }
+
+// function to display the memory map table
+/*
+    This function displays the memory map table.
+*/
 
 void displayMMT(const Memory &memory) {
     cout << "\nMemory Map Table (MMT):\n";
@@ -108,6 +129,11 @@ void displayMMT(const Memory &memory) {
             cout << "Used\t\t" << f->jobName << "(" << f->pageNumber << ")\n";
     }
 }
+
+// function to resolve addresses
+/*
+    This function resolves logical addresses to physical addresses using the page table and memory map table.
+*/
 
 void resolveAddresses(const vector<AddressRequest> &requests, const vector<Job> &jobs, const Memory &memory) {
     cout << "\nAddress Resolution Results:\n";
@@ -139,6 +165,11 @@ void resolveAddresses(const vector<AddressRequest> &requests, const vector<Job> 
         }
     }
 }
+
+// main function
+/*
+    This function is the main function that runs the program.
+*/
 
 int main() {
     Memory mainMemory;
