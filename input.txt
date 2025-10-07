@@ -1,4 +1,18 @@
+# Memory configuration
 MemorySize 1024 128
+
+# Job definitions
 JobA 200
 JobB 300
 JobC 700
+JobD 64
+JobE 512
+
+# Address resolution requests
+Address JobA 0 50
+Address JobA 1 100
+Address JobB 2 20
+Address JobC 3 80
+Address JobE 4 60
+Address JobD 0 10
+Address JobE 3 100

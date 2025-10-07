@@ -35,4 +35,12 @@ struct Memory {
     vector<Frame> frames;
 };
 
+// Represents a logical address request
+struct AddressRequest {
+    string jobName;
+    int pageNumber;
+    int offset;
+};
+
+
 #endif

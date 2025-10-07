@@ -1,135 +1,169 @@
+#include "structs.h"
 #include <iostream>
-#include <vector>
-#include <cstdlib>
+#include <fstream>
+#include <sstream>
+#include <cmath>
 #include <ctime>
-#include <map>
+#include <random>
+#include <algorithm>
 using namespace std;
 
-struct Page {
-    int pageNumber;
-    int frameNumber;
-};
+bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory, vector<AddressRequest> &requests) {
+    ifstream file(filename);
+    if (!file.is_open()) return false;
 
-struct Job {
-    string name;
-    int size;
-    int pageSize;
-    int numPages;
-    vector<Page> pages;
-};
+    string line;
+    bool memorySet = false;
 
-class Memory {
-    int totalFrames;
-    int pageSize;
-    vector<int> frames;
-    map<int, string> frameToJob;
+    while (getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        stringstream ss(line);
+        string keyword;
+        ss >> keyword;
 
-public:
-    Memory(int totalFrames, int pageSize) : totalFrames(totalFrames), pageSize(pageSize) {
-        frames.assign(totalFrames, -1);
-    }
-
-    // Load job pages into memory frames randomly
-    void loadJob(Job &job) {
-        srand(time(0));
-        for (auto &page : job.pages) {
-            int frame = rand() % totalFrames;
-            while (frames[frame] != -1) frame = rand() % totalFrames; // find free frame
-            frames[frame] = page.pageNumber;
-            page.frameNumber = frame;
-            frameToJob[frame] = job.name;
+        if (keyword == "MemorySize") {
+            ss >> memory.totalSize >> memory.pageSize;
+            memorySet = true;
+        } else if (keyword == "Address") {
+            AddressRequest req;
+            ss >> req.jobName >> req.pageNumber >> req.offset;
+            requests.push_back(req);
+        } else {
+            Job job;
+            job.name = keyword;
+            ss >> job.size;
+            jobs.push_back(job);
         }
     }
 
-    // Display memory status
-    void showMemory() {
-        cout << "\n=== MEMORY FRAMES ===\n";
-        for (int i = 0; i < totalFrames; i++) {
-            if (frames[i] == -1)
-                cout << "Frame " << i << ": [Empty]\n";
-            else
-                cout << "Frame " << i << ": Page " << frames[i] << " (" << frameToJob[i] << ")\n";
-        }
+    if (!memorySet) return false;
+
+    memory.numFrames = memory.totalSize / memory.pageSize;
+    for (int i = 0; i < memory.numFrames; ++i) {
+        Frame f = {i, true, "", -1};
+        memory.frames.push_back(f);
     }
 
-    // Perform Address Resolution
-    void addressResolution(Job &job, int logicalAddress) {
-        int pageNumber = logicalAddress / job.pageSize;
-        int offset = logicalAddress % job.pageSize;
+    return true;
+}
 
-        if (pageNumber >= job.numPages) {
-            cout << "Invalid logical address! (Exceeds job size)\n";
-            return;
+void simulateDemandPaging(Job &job, Memory &mainMemory) {
+    job.numPages = ceil((double)job.size / mainMemory.pageSize);
+    cout << "\nLoading Job " << job.name << " (" << job.size << " KB)...\n";
+    cout << "Total Pages: " << job.numPages << endl;
+
+    // Initialize all pages as "not in memory"
+    job.pages.clear();
+    for (int p = 0; p < job.numPages; ++p) {
+        Page page = {p, -1};
+        job.pages.push_back(page);
+    }
+
+    // Randomize frame indices
+    vector<int> frameIndices(mainMemory.numFrames);
+    for (int i = 0; i < mainMemory.numFrames; ++i) frameIndices[i] = i;
+    unsigned seed = time(nullptr);
+    shuffle(frameIndices.begin(), frameIndices.end(), default_random_engine(seed));
+
+    int framesToLoad = min(job.numPages, (int)(job.numPages * 0.5 + rand() % (job.numPages / 2 + 1))); 
+    // Load 50–100% of pages randomly
+
+    cout << "Pages loaded into memory: " << framesToLoad << endl;
+
+    int allocated = 0;
+    for (int i = 0; i < mainMemory.numFrames && allocated < framesToLoad; ++i) {
+        int frameIdx = frameIndices[i];
+        if (!mainMemory.frames[frameIdx].isFree) continue;
+
+        int pageToLoad = rand() % job.numPages;
+        if (job.pages[pageToLoad].frameNumber != -1) continue; // already loaded
+
+        mainMemory.frames[frameIdx].isFree = false;
+        mainMemory.frames[frameIdx].jobName = job.name;
+        mainMemory.frames[frameIdx].pageNumber = pageToLoad;
+
+        job.pages[pageToLoad].frameNumber = frameIdx;
+        allocated++;
+    }
+}
+
+void displayPMT(const Job &job) {
+    cout << "\nPage Map Table (PMT) for " << job.name << ":\n";
+    cout << "Page\tFrame\n";
+    for (vector<Page>::const_iterator p = job.pages.begin(); p != job.pages.end(); ++p) {
+        cout << p->pageNumber << "\t";
+        if (p->frameNumber == -1) cout << "Not in memory\n";
+        else cout << p->frameNumber << endl;
+    }
+}
+
+void displayMMT(const Memory &memory) {
+    cout << "\nMemory Map Table (MMT):\n";
+    cout << "Frame\tStatus\t\tJob(Page)\n";
+    for (vector<Frame>::const_iterator f = memory.frames.begin(); f != memory.frames.end(); ++f) {
+        cout << f->frameNumber << "\t";
+        if (f->isFree)
+            cout << "Free\t\t-\n";
+        else
+            cout << "Used\t\t" << f->jobName << "(" << f->pageNumber << ")\n";
+    }
+}
+
+void resolveAddresses(const vector<AddressRequest> &requests, const vector<Job> &jobs, const Memory &memory) {
+    cout << "\nAddress Resolution Results:\n";
+    for (vector<AddressRequest>::const_iterator req = requests.begin(); req != requests.end(); ++req) {
+        vector<Job>::const_iterator it = jobs.begin();
+        for (; it != jobs.end(); ++it) {
+            if (it->name == req->jobName) break;
+        }
+        if (it == jobs.end()) {
+            cout << "Job " << req->jobName << " not found.\n";
+            continue;
         }
 
-        int frameNumber = job.pages[pageNumber].frameNumber;
-        int physicalAddress = frameNumber * job.pageSize + offset;
+        const Job &job = *it;
+        if (req->pageNumber >= job.numPages) {
+            cout << "Invalid page number for job " << job.name << endl;
+            continue;
+        }
 
-        cout << "\nAddress Resolution for Job: " << job.name << endl;
-        cout << "Logical Address: " << logicalAddress << endl;
-        cout << "→ Page Number: " << pageNumber << ", Offset: " << offset << endl;
-        cout << "→ Frame Number: " << frameNumber << endl;
-        cout << "→ Physical Address: " << physicalAddress << endl;
+        const Page &page = job.pages[req->pageNumber];
+        if (page.frameNumber == -1) {
+            cout << "Page Fault! " << job.name << " Page " << req->pageNumber << " not in memory.\n";
+        } else {
+            int physicalAddress = (page.frameNumber * memory.pageSize) + req->offset;
+            cout << "Job: " << req->jobName
+                 << " | Page: " << req->pageNumber
+                 << " | Offset: " << req->offset
+                 << " → Physical Address: " << physicalAddress << " KB (Frame " << page.frameNumber << ")\n";
+        }
     }
-};
+}
 
 int main() {
-    int totalFrames, pageSize, numJobs;
-    cout << "Enter total number of memory frames: ";
-    cin >> totalFrames;
-    cout << "Enter page size (in bytes): ";
-    cin >> pageSize;
+    Memory mainMemory;
+    vector<Job> jobs;
+    vector<AddressRequest> requests;
 
-    Memory memory(totalFrames, pageSize);
+    string filename;
+    cout << "Enter input filename: ";
+    cin >> filename;
 
-    cout << "Enter number of jobs: ";
-    cin >> numJobs;
-
-    vector<Job> jobs(numJobs);
-
-    // Accept multiple jobs
-    for (int i = 0; i < numJobs; i++) {
-        cout << "\nEnter name of Job " << i + 1 << ": ";
-        cin >> jobs[i].name;
-        cout << "Enter size of Job " << jobs[i].name << " (in bytes): ";
-        cin >> jobs[i].size;
-        jobs[i].pageSize = pageSize;
-        jobs[i].numPages = (jobs[i].size + pageSize - 1) / pageSize;
-
-        cout << "Job divided into " << jobs[i].numPages << " pages.\n";
-
-        for (int p = 0; p < jobs[i].numPages; p++) {
-            Page page;
-            page.pageNumber = p;
-            page.frameNumber = -1;
-            jobs[i].pages.push_back(page);
-        }
-
-        // Load pages into memory randomly
-        memory.loadJob(jobs[i]);
+    if (!loadFromFile(filename, jobs, mainMemory, requests)) {
+        cerr << "Failed to load data.\n";
+        return 1;
     }
 
-    memory.showMemory();
+    srand(time(0));
+    for (vector<Job>::iterator job = jobs.begin(); job != jobs.end(); ++job)
+        simulateDemandPaging(*job, mainMemory);
 
-    // Perform Address Resolution
-    string jobName;
-    cout << "\nEnter job name for address resolution: ";
-    cin >> jobName;
+    displayMMT(mainMemory);
+    for (vector<Job>::const_iterator job = jobs.begin(); job != jobs.end(); ++job)
+        displayPMT(*job);
 
-    bool found = false;
-    for (auto &job : jobs) {
-        if (job.name == jobName) {
-            int logicalAddress;
-            cout << "Enter logical address: ";
-            cin >> logicalAddress;
-            memory.addressResolution(job, logicalAddress);
-            found = true;
-            break;
-        }
-    }
-
-    if (!found)
-        cout << "Job not found!\n";
+    if (!requests.empty())
+        resolveAddresses(requests, jobs, mainMemory);
 
     return 0;
 }

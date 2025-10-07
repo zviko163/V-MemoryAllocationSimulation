@@ -1,0 +1,90 @@
+# =============================
+# Test 1 — Normal Mix (baseline)
+# =============================
+MemorySize 1024 128
+JobA 200
+JobB 300
+JobC 700
+JobD 128
+JobE 64
+
+# Address resolution requests
+Address JobA 0 50
+Address JobA 1 100
+Address JobB 2 20
+Address JobC 3 80
+Address JobD 0 10
+Address JobE 0 30
+
+
+# =============================
+# Test 2 — Fragmentation Stress
+# =============================
+MemorySize 512 100
+Job1 30
+Job2 70
+Job3 140
+Job4 260
+Job5 10
+Job6 40
+
+# Address resolution requests
+Address Job1 0 20
+Address Job2 0 50
+Address Job3 1 60
+Address Job4 2 80
+Address Job5 0 5
+Address Job6 0 10
+
+
+# =============================
+# Test 3 — Insufficient Memory
+# =============================
+MemorySize 512 64
+JobAlpha 128
+JobBeta 256
+JobGamma 400
+JobDelta 100
+
+# Address resolution requests
+Address JobAlpha 0 10
+Address JobBeta 1 20
+Address JobGamma 3 30
+Address JobDelta 0 50
+
+
+# =============================
+# Test 4 — Large Memory with Many Small Jobs
+# =============================
+MemorySize 2048 128
+JobX 64
+JobY 64
+JobZ 64
+JobP 64
+JobQ 64
+JobR 64
+JobS 64
+JobT 64
+JobU 64
+JobV 64
+JobW 64
+
+# Address resolution requests
+Address JobX 0 10
+Address JobZ 0 50
+Address JobS 0 100
+Address JobV 0 20
+Address JobW 0 64
+Address JobQ 0 5
+
+
+# =============================
+# Test 5 — Oversized Job (bigger than memory)
+# =============================
+MemorySize 1024 128
+JobBig 2048
+JobTiny 64
+
+# Address resolution requests
+Address JobBig 0 50
+Address JobTiny 0 30

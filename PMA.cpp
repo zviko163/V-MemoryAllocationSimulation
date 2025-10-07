@@ -18,59 +18,78 @@ using namespace std;
  * Job2 <job_size_in_KB>
  * ...
  */
-bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory) {
+bool loadFromFile(const string &filename, vector<Job> &jobs, Memory &memory, vector<AddressRequest> &requests) {
     ifstream file(filename);
-    if (!file.is_open()) {
-        cerr << "Error: Could not open file " << filename << endl;
-        return false;
-    }
+    if (!file.is_open()) return false;
 
     string line;
     bool memorySet = false;
 
     while (getline(file, line)) {
-        if (line.empty()) continue;
+        if (line.empty() || line[0] == '#') continue;  // skip comments
 
         stringstream ss(line);
-        string name;
-        ss >> name;
+        string keyword;
+        ss >> keyword;
 
-        // extraacting memory attributes and job details from file
-        if (name == "MemorySize") {
+        if (keyword == "MemorySize") {
             ss >> memory.totalSize >> memory.pageSize;
             memorySet = true;
+        } else if (keyword == "Address") {
+            AddressRequest req;
+            ss >> req.jobName >> req.pageNumber >> req.offset;
+            requests.push_back(req);
         } else {
             Job job;
-            job.name = name;
+            job.name = keyword;
             ss >> job.size;
             jobs.push_back(job);
         }
     }
 
-    file.close();
+    if (!memorySet) return false;
 
-    // ensuring memory parameters were set
-    if (!memorySet) {
-        cerr << "Error: Memory size not specified in file.\n";
-        return false;
-    }
-
-    // computing number of frames created in memory
     memory.numFrames = memory.totalSize / memory.pageSize;
-
-    // initializing memory frames
     for (int i = 0; i < memory.numFrames; ++i) {
-        Frame f;
-        f.frameNumber = i;
-        f.isFree = true;
-        f.jobName = "";
-        f.pageNumber = -1;
+        Frame f = {i, true, "", -1};
         memory.frames.push_back(f);
     }
 
     return true;
 }
 
+void resolveAddresses(const vector<AddressRequest> &requests, const vector<Job> &jobs, const Memory &memory) {
+    cout << "\nAddress Resolution Results:\n";
+    for (vector<AddressRequest>::const_iterator req = requests.begin(); req != requests.end(); ++req) {
+        vector<Job>::const_iterator it = jobs.begin();
+        for (; it != jobs.end(); ++it) {
+            if (it->name == req->jobName) break;
+        }
+        if (it == jobs.end()) {
+            cout << "Job " << req->jobName << " not found.\n";
+            continue;
+        }
+
+        const Job &job = *it;
+        vector<Page>::const_iterator pageIt = job.pages.begin();
+        for (; pageIt != job.pages.end(); ++pageIt) {
+            if (pageIt->pageNumber == req->pageNumber) break;
+        }
+
+        if (pageIt == job.pages.end()) {
+            cout << "Page " << req->pageNumber << " not allocated for " << req->jobName << endl;
+            continue;
+        }
+
+        int frameNumber = pageIt->frameNumber;
+        int physicalAddress = (frameNumber * memory.pageSize) + req->offset;
+
+        cout << "Job: " << req->jobName
+             << ", Page: " << req->pageNumber
+             << ", Offset: " << req->offset
+             << " → Physical Address: " << physicalAddress << " KB (Frame " << frameNumber << ")\n";
+    }
+}
 
 /*
  * function to calculate the internal fragmentation for a job
@@ -108,7 +127,8 @@ void divideMemoryToFrames(Job &job, Memory &mainMemory) {
     shuffle(frameIndices.begin(), frameIndices.end(), default_random_engine(seed));
 
     // allocate frames in the randomized order
-    for (int idx : frameIndices) {
+    for (vector<int>::iterator it = frameIndices.begin(); it != frameIndices.end(); ++it) {
+        int idx = *it;
         if (allocated >= job.numPages)
             break;
 
@@ -129,8 +149,8 @@ void divideMemoryToFrames(Job &job, Memory &mainMemory) {
     if (allocated < job.numPages) {
         cout << "Not enough memory to allocate all pages for " << job.name << endl;
 
-        for (Page &p : job.pages)
-            mainMemory.frames[p.frameNumber].isFree = true;
+        for (vector<Page>::iterator p = job.pages.begin(); p != job.pages.end(); ++p)
+            mainMemory.frames[p->frameNumber].isFree = true;
 
         job.pages.clear();
     } else {
@@ -152,43 +172,44 @@ void divideMemoryToFrames(Job &job, Memory &mainMemory) {
 void displayPMT(const Job &job) {
     cout << "\nPage Map Table (PMT) for " << job.name << ":\n";
     cout << "Page\tFrame\n";
-    for (const Page &p : job.pages)
-        cout << p.pageNumber << "\t" << p.frameNumber << endl;
+    for (vector<Page>::const_iterator p = job.pages.begin(); p != job.pages.end(); ++p)
+        cout << p->pageNumber << "\t" << p->frameNumber << endl;
 }
 
 void displayMMT(const Memory &memory) {
     cout << "\nMemory Map Table (MMT):\n";
     cout << "Frame\tStatus\t\tJob(Page)\n";
-    for (const Frame &f : memory.frames) {
-        cout << f.frameNumber << "\t";
-        if (f.isFree)
+    for (vector<Frame>::const_iterator f = memory.frames.begin(); f != memory.frames.end(); ++f) {
+        cout << f->frameNumber << "\t";
+        if (f->isFree)
             cout << "Free\t\t-\n";
         else
-            cout << "Used\t\t" << f.jobName << "(" << f.pageNumber << ")\n";
+            cout << "Used\t\t" << f->jobName << "(" << f->pageNumber << ")\n";
     }
 }
-
 int main() {
     Memory mainMemory;
     vector<Job> jobs;
+    vector<AddressRequest> requests;
 
     string filename;
     cout << "Enter input filename: ";
     cin >> filename;
 
-    if (!loadFromFile(filename, jobs, mainMemory)) {
+    if (!loadFromFile(filename, jobs, mainMemory, requests)) {
         cerr << "Failed to load data.\n";
         return 1;
     }
 
-    // Allocate memory for each job
-    for (auto &job : jobs)
-        divideMemoryToFrames(job, mainMemory);
+    for (vector<Job>::iterator job = jobs.begin(); job != jobs.end(); ++job)
+        divideMemoryToFrames(*job, mainMemory);
 
-    // Display MMT and PMTs
     displayMMT(mainMemory);
-    for (auto &job : jobs)
-        displayPMT(job);
+    for (vector<Job>::iterator job = jobs.begin(); job != jobs.end(); ++job)
+        displayPMT(*job);
+
+    if (!requests.empty())
+        resolveAddresses(requests, jobs, mainMemory);
 
     return 0;
 }
