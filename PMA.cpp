@@ -3,6 +3,9 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <algorithm>  // for std::shuffle
+#include <random>     // for std::default_random_engine
+#include <ctime>      // for std::time
 
 using namespace std;
 
@@ -95,35 +98,44 @@ void divideMemoryToFrames(Job &job, Memory &mainMemory) {
 
     int allocated = 0;
 
-    // looping through frames array to allocate pages to the free frames
-    for (int i = 0; i < mainMemory.numFrames && allocated < job.numPages; ++i) {
-        if (mainMemory.frames[i].isFree) {
-            mainMemory.frames[i].isFree = false;
-            mainMemory.frames[i].jobName = job.name;
-            mainMemory.frames[i].pageNumber = allocated;
+    // create a list of all frame indices
+    vector<int> frameIndices(mainMemory.numFrames);
+    for (int i = 0; i < mainMemory.numFrames; ++i)
+        frameIndices[i] = i;
 
-            // updating job's Page Map Table; adding allocated page
-            Page page = {allocated, i};
+    // shuffle frame indices for random allocation
+    unsigned seed = static_cast<unsigned>(time(nullptr));
+    shuffle(frameIndices.begin(), frameIndices.end(), default_random_engine(seed));
+
+    // allocate frames in the randomized order
+    for (int idx : frameIndices) {
+        if (allocated >= job.numPages)
+            break;
+
+        if (mainMemory.frames[idx].isFree) {
+            mainMemory.frames[idx].isFree = false;
+            mainMemory.frames[idx].jobName = job.name;
+            mainMemory.frames[idx].pageNumber = allocated;
+
+            // update Page Map Table
+            Page page = {allocated, idx};
             job.pages.push_back(page);
 
             allocated++;
         }
     }
 
-    // in an scenario where not all pages could be allocated, deallocate all previously allocated pages
+    // if not all pages could be allocated, roll back
     if (allocated < job.numPages) {
         cout << "Not enough memory to allocate all pages for " << job.name << endl;
 
         for (Page &p : job.pages)
             mainMemory.frames[p.frameNumber].isFree = true;
 
-        // clearing the job's pages array
         job.pages.clear();
     } else {
-        // on a successful allocation
         cout << "Job " << job.name << " allocated successfully.\n";
 
-        // calculating and displaying internal fragmentation
         int fragmentation = calculateInternalFragmentation(job, mainMemory.pageSize);
         if (fragmentation > 0)
             cout << "\nInternal Fragmentation for job " << job.name << ": "
