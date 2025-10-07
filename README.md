@@ -39,15 +39,13 @@ g++ -std=c++11 virtual_memory.cpp -o vm
 # Memory configuration
 MemorySize <total_memory_KB> <page_size_KB>
 
-# Job definitions
+# Job definition
 <JobName> <job_size_KB>
-<JobName2> <job_size_KB>
 ...
 
-# Address resolution requests (optional)
+# Address resolution requests 
 Address <JobName> <page_number> <offset>
-Address <JobName2> <page_number> <offset>
-...
+
 ```
 
 **Example `input.txt`:**
@@ -55,21 +53,14 @@ Address <JobName2> <page_number> <offset>
 # Memory configuration
 MemorySize 1024 128
 
-# Job definitions
+# Job definition
 JobA 200
-JobB 300
-JobC 700
-JobD 64
-JobE 512
+
 
 # Address resolution requests
 Address JobA 0 50
-Address JobA 1 100
-Address JobB 2 20
-Address JobC 3 80
-Address JobE 4 60
 Address JobD 0 10
-Address JobE 3 100
+
 ```
 
 ### 2. Demand Paging Simulation (demand_paged.cpp) - `input.txt`
@@ -108,7 +99,7 @@ Address JobC 3 40
 Address JobA 1 70
 ```
 
-## 📊 Expected Output Examples
+## Expected Output Examples
 
 ### Paged Memory Allocation Output
 ```
@@ -119,21 +110,17 @@ Job JobA allocated successfully.
 
 Internal Fragmentation for job JobA: 56 KB
 
-Allocating job JobB (300 KB) needing 3 pages...
-Job JobB allocated successfully.
-
-Internal Fragmentation for job JobB: 84 KB
 
 Memory Map Table (MMT):
 Frame	Status		Job(Page)
 0	Free		-
-1	Used		JobB(2)
+1	Used		-
 2	Used		JobA(0)
-3	Used		JobD(0)
+3	Used		-
 4	Used		JobA(1)
 5	Free		-
-6	Used		JobB(1)
-7	Used		JobB(0)
+6	Used		-
+7	Used		-
 
 Page Map Table (PMT) for JobA:
 Page	Frame
@@ -204,7 +191,7 @@ Page Fault! JobB Page 2 not in memory.
 Job: JobB | Page: 2 | Offset: 30 → Physical Address: 414 KB (Frame 3)
 ```
 
-## 🧠 High-Level Intuitions and Approach
+## High-Level Intuitions and Approach
 
 ### 1. Paged Memory Allocation (PMA.cpp)
 
@@ -257,7 +244,7 @@ Job: JobB | Page: 2 | Offset: 30 → Physical Address: 414 KB (Frame 3)
 4. Update replacement data structures on each memory access
 5. Provide detailed logging of page hits, faults, and replacements
 
-## 🔧 Technical Implementation Details
+## Technical Implementation Details
 
 ### Data Structures
 - **Frame:** Represents a physical memory frame with status and job information
@@ -278,7 +265,7 @@ Job: JobB | Page: 2 | Offset: 30 → Physical Address: 414 KB (Frame 3)
 - **Frame Status Tracking:** Monitors which frames are free or occupied
 - **Address Resolution:** Converts logical addresses to physical addresses
 
-## 🎯 Educational Value
+## Educational Value
 
 This simulation suite demonstrates:
 - **Memory Management Concepts:** Paging, segmentation, virtual memory
@@ -287,4 +274,3 @@ This simulation suite demonstrates:
 - **Address Translation:** Logical to physical address mapping
 - **Performance Implications:** Page faults, memory efficiency, and replacement policies
 
-Perfect for understanding operating system memory management concepts and their practical implementations.
